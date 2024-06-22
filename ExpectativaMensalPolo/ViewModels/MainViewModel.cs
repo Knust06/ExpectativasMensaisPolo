@@ -1,7 +1,9 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading.Tasks;
@@ -10,6 +12,9 @@ using ExpectativaMensalPolo.Models;
 using ExpectativaMensalPolo.Services;
 using ExpectativaMensalPolo.Helpers;
 using Microsoft.Win32;
+using OxyPlot;
+using OxyPlot.Axes;
+using OxyPlot.Series;
 
 namespace ExpectativaMensalPolo.ViewModels
 {
@@ -20,6 +25,7 @@ namespace ExpectativaMensalPolo.ViewModels
         private DateTime _dataFim;
         private Indicador _indicadorSelecionado;
         private ObservableCollection<Expectativa> _expectativas;
+        private PlotModel _plotModel;
 
         public MainViewModel()
         {
@@ -34,6 +40,7 @@ namespace ExpectativaMensalPolo.ViewModels
             DataFim = DateTime.Now;
             BuscarExpectativasCommand = new RelayCommand(async (param) => await BuscarExpectativas());
             ExportarCsvCommand = new RelayCommand((param) => ExportarCsv());
+            InitializePlotModel();
         }
 
         public ObservableCollection<Indicador> Indicadores { get; }
@@ -83,15 +90,61 @@ namespace ExpectativaMensalPolo.ViewModels
             }
         }
 
+        public PlotModel PlotModel
+        {
+            get => _plotModel;
+            set
+            {
+                _plotModel = value;
+                OnPropertyChanged();
+            }
+        }
+
         public ICommand BuscarExpectativasCommand { get; }
         public ICommand ExportarCsvCommand { get; }
+
+        private void InitializePlotModel()
+        {
+            PlotModel = new PlotModel { Title = "Expectativa Mensal" };
+            PlotModel.Axes.Add(new DateTimeAxis { Position = AxisPosition.Bottom, StringFormat = "yyyy-MM-dd" });
+            PlotModel.Axes.Add(new LinearAxis { Position = AxisPosition.Left });
+        }
 
         private async Task BuscarExpectativas()
         {
             if (IndicadorSelecionado != null)
             {
-                Expectativas = new ObservableCollection<Expectativa>(await _apiService.ObterExpectativasAsync(IndicadorSelecionado.Nome, DataInicio, DataFim));
+                var expectativas = await _apiService.ObterExpectativasAsync(IndicadorSelecionado.Nome, DataInicio, DataFim);
+                Expectativas = new ObservableCollection<Expectativa>(expectativas);
+                AtualizarGrafico();
             }
+        }
+
+        private void AtualizarGrafico()
+        {
+            var series = new LineSeries
+            {
+                Title = IndicadorSelecionado.Nome,
+                MarkerType = MarkerType.Circle
+            };
+
+            var mediaDiaria = Expectativas
+                .GroupBy(e => e.Data)
+                .Select(g => new
+                {
+                    Data = g.Key,
+                    Media = g.Average(e => e.Media)
+                })
+                .OrderBy(x => x.Data);
+
+            foreach (var data in mediaDiaria)
+            {
+                series.Points.Add(new DataPoint(DateTimeAxis.ToDouble(data.Data), data.Media));
+            }
+
+            PlotModel.Series.Clear();
+            PlotModel.Series.Add(series);
+            PlotModel.InvalidatePlot(true);
         }
 
         private void ExportarCsv()
