@@ -15,34 +15,19 @@ using Microsoft.Win32;
 using OxyPlot;
 using OxyPlot.Axes;
 using OxyPlot.Series;
+using System.Windows;
 
 namespace ExpectativaMensalPolo.ViewModels
 {
     public class MainViewModel : INotifyPropertyChanged
     {
+        #region Properties and Service
         private readonly ApiService _apiService;
         private DateTime _dataInicio;
         private DateTime _dataFim;
         private Indicador _indicadorSelecionado;
         private ObservableCollection<Expectativa> _expectativas;
         private PlotModel _plotModel;
-
-        public MainViewModel()
-        {
-            _apiService = new ApiService();
-            Indicadores = new ObservableCollection<Indicador>
-            {
-                new Indicador { Nome = "IPCA" },
-                new Indicador { Nome = "IGP-M" },
-                new Indicador { Nome = "Selic" }
-            };
-            DataInicio = DateTime.Now.AddMonths(-1);
-            DataFim = DateTime.Now;
-            BuscarExpectativasCommand = new RelayCommand(async (param) => await BuscarExpectativas());
-            ExportarCsvCommand = new RelayCommand((param) => ExportarCsv());
-            InitializePlotModel();
-        }
-
         public ObservableCollection<Indicador> Indicadores { get; }
         public ObservableCollection<Expectativa> Expectativas
         {
@@ -99,9 +84,32 @@ namespace ExpectativaMensalPolo.ViewModels
                 OnPropertyChanged();
             }
         }
+        #endregion
 
+        #region Constructor
+        public MainViewModel()
+        {
+            _apiService = new ApiService();
+            Indicadores = new ObservableCollection<Indicador>
+            {
+                new Indicador { Nome = "Selecione o Indicador..." },
+                new Indicador { Nome = "IPCA" },
+                new Indicador { Nome = "IGP-M" },
+                new Indicador { Nome = "Selic" }
+            };
+            DataInicio = DateTime.Now.AddMonths(-1);
+            DataFim = DateTime.Now;
+            IndicadorSelecionado = Indicadores[0];
+            BuscarExpectativasCommand = new RelayCommand(async (param) => await BuscarExpectativas());
+            ExportarCsvCommand = new RelayCommand((param) => ExportarCsv());
+            InitializePlotModel();
+        }
+        #endregion
+
+        #region Commands
         public ICommand BuscarExpectativasCommand { get; }
         public ICommand ExportarCsvCommand { get; }
+        #endregion
 
         private void InitializePlotModel()
         {
@@ -112,7 +120,12 @@ namespace ExpectativaMensalPolo.ViewModels
 
         private async Task BuscarExpectativas()
         {
-            if (IndicadorSelecionado != null)
+            if (IndicadorSelecionado == null || IndicadorSelecionado.Nome == "Selecione o Indicador...")
+            {
+                MessageBox.Show("Por favor, selecione um indicador válido.", "Informação");
+                return;
+            }
+            else
             {
                 var expectativas = await _apiService.ObterExpectativasAsync(IndicadorSelecionado.Nome, DataInicio, DataFim);
                 Expectativas = new ObservableCollection<Expectativa>(expectativas);
